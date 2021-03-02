@@ -1,0 +1,16 @@
+{{define "index"}}
+<!DOCTYPE html>
+<html>
+    <head>
+    <meta http-equiv="refresh" content="15">
+    </head>
+    <body>
+        <div style="text-align: center;">
+        <h2>Simple Forecast!</h2>
+        <p><b>Status : {{.Status.Indicator}}</b></p>
+        <p>Wind : {{.Status.Wind}}</p>
+        <p>Water : {{.Status.Water}}</p>
+        </div>
+    </body>
+</html>
+{{end}}

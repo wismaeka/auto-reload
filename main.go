@@ -5,55 +5,103 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-
-	"github.com/gin-gonic/gin"
+	"net/http"
+	"os"
+	"strconv"
+	"text/template"
+	"time"
 )
 
-// type SetStatus struct {
-// 	Status string
-// 	Water  int `json:"water"`
-// 	Wind   int `json:"wind"`
-// }
-type SetStatus struct {
-	Status string
+var statRes status
+
+type status struct {
+	Status level `json:"Status"`
 }
 
-type Level struct {
-	Water int
-	Wind  int
+type level struct {
+	Water     string `json:"Water"`
+	Wind      string `json:"Wind"`
+	Indicator string `json:"Indicator"`
 }
 
-func statusLevel(c *gin.Context) {
-	var level Level
-	if level.Water < 5 && level.Wind < 6 {
-		fmt.Println("Aman")
-	} else if level.Water > 8 && level.Wind > 15 {
-		fmt.Println("Bahaya")
+func statusLevel(water int, wind int) (indicator string) {
+
+	if water > 8 || wind > 15 {
+		return "Bahaya"
+	} else if (water >= 6 && water <= 8) || (wind >= 7 && wind <= 15) {
+		return "Siaga"
 	} else {
-		fmt.Println("Siaga")
+		return "Aman"
 	}
+
 }
 
-func writeJson() {
-	max := 100
-	min := 1
-	water := rand.Intn(max-min)+min
-	wind := rand.Intn(max-min)+min
-	jsonString := `level{water,wind}`
-	jsonData := []byte(jsonString)
-	var status SetStatus
-	err := json.Unmarshal(jsonData, &status)
+func generateVal() (water, wind int) {
+
+	rand.Seed(time.Now().UTC().UnixNano())
+	water = rand.Intn(100)
+	wind = rand.Intn(100)
+
+	return water, wind
+
+}
+
+func writeJson(wt, wd int) (dstatus status) {
+	water := strconv.Itoa(wt)
+	wind := strconv.Itoa(wd)
+	dataStatus := status{level{water + " meter", wind + " m/s", statusLevel(wt, wd)}}
+
+	b, err := json.Marshal(dataStatus)
 
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+
+	f, err := os.OpenFile("test.json",
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println(err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(string(b) + "\n"); err != nil {
+		log.Println(err)
+	}
+
+	return dataStatus
+}
+
+func structToMap(data interface{}) (map[string]interface{}, error) {
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	mapData := make(map[string]interface{})
+	err = json.Unmarshal(dataBytes, &mapData)
+	if err != nil {
+		return nil, err
+	}
+	return mapData, nil
 }
 
 func main() {
-	
-	
-	r := gin.Default()
-	r.GET("/", statusLevel)
+	var tmpl, err = template.ParseGlob("views/*")
+	if err != nil {
+		panic(err.Error())
+	}
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		water, wind := generateVal()
+		statRes = writeJson(water, wind)
+		mapdt, err1 := structToMap(statRes)
+		if err1 != nil {
+			panic(err1.Error())
+		}
+		err = tmpl.ExecuteTemplate(w, "index", mapdt)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 
-	r.Run()
+	})
+
+	fmt.Println("server started at localhost:9000")
+	http.ListenAndServe(":9000", nil)
 }
